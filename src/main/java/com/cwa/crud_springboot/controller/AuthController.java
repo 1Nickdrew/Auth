@@ -1,12 +1,11 @@
 // AuthController.java
 package com.cwa.crud_springboot.controller;
 
-import com.cwa.crud_springboot.dto.ApiResponse;
-import com.cwa.crud_springboot.dto.JwtAuthenticationResponse;
-import com.cwa.crud_springboot.dto.LoginRequest;
-import com.cwa.crud_springboot.dto.SignUpRequest;
+import com.cwa.crud_springboot.dto.*;
 import com.cwa.crud_springboot.entity.User;
+import com.cwa.crud_springboot.exceptions.TokenRefreshException;
 import com.cwa.crud_springboot.repository.UserRepository;
+import com.cwa.crud_springboot.service.AuthenticationService;
 import com.cwa.crud_springboot.service.JwtTokenProvider;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +28,9 @@ public class AuthController {
 
     @Autowired
     private AuthenticationManager authenticationManager;
+
+    @Autowired
+    private AuthenticationService authenticationService;
 
     @Autowired
     private UserRepository userRepository;
@@ -88,20 +90,12 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<?> refreshToken(@RequestBody JwtAuthenticationResponse jwtAuthenticationResponse) {
-        if (tokenProvider.validateToken(jwtAuthenticationResponse.getRefreshToken())) {
-            Long userId = tokenProvider.getUserIdFromJWT(jwtAuthenticationResponse.getRefreshToken());
-            // Here you should check if the refresh token is in your database and not revoked
-
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-
-            Authentication authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
-            String newAccessToken = tokenProvider.generateAccessToken(authentication);
-
-            return ResponseEntity.ok(new JwtAuthenticationResponse(newAccessToken, jwtAuthenticationResponse.getRefreshToken()));
-        } else {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse(false, "Invalid refresh token"));
+    public ResponseEntity<?> refreshToken(@Valid @RequestBody RefreshTokenRequest refreshTokenRequest) {
+        try {
+            JwtAuthenticationResponse response = authenticationService.refreshToken(refreshTokenRequest.getRefreshToken());
+            return ResponseEntity.ok(response);
+        } catch (TokenRefreshException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse(false, e.getMessage()));
         }
     }
     
